@@ -8,10 +8,10 @@
 #include <iostream>
 #include <fstream>
 
-lda_model::lda_model():Topic_num(0), lda_Corpus_status(), alpha(),beta(), test_ratio(0) {
+lda_model::lda_model():lda_Corpus_status(), alpha(),beta(), test_ratio(0) {
 }
 
-lda_model::lda_model(int t_nu, double a, double b, double ratio) :Topic_num( t_nu),lda_Corpus_status(), alpha(1, a), beta(1, b), test_ratio(ratio) {
+lda_model::lda_model(int t_nu, double a, double b, double ratio) :Topic_num( t_nu), alpha(1, a), beta(1, b), test_ratio(ratio) {
 }
 
 //inference all

@@ -67,11 +67,11 @@ if __name__ == "__main__":
         #print word_list 
           
     file.close() 
-    index_file.write(str(len(word_list)))
-    index_file.write(" ")
+    #index_file.write(str(len(word_list)))
+    #index_file.write(" ")
     for key in word_list:
         index_file.write(key)
-        index_file.write(":")
+        index_file.write(" ")
         index_file.write(word_list[key])
         index_file.write(" ")
     index_file.close() 

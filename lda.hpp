@@ -1,4 +1,4 @@
-#include "topic_model.cpp"
+#include "topic_model.hpp"
 #include <vector>
 #include <stdlib.h>
 #include <time.h>
@@ -6,26 +6,35 @@
 #include <pair>
 
 class lda_doc: doc {
+public:
     lda_doc();
+    lda_doc(int n,int y);
+    bool update(int c);
 };
 
 class lda_Corpus: Corpus {
-private:
-    std::unordered_map<pair<int, std::vector<lda_doc> > > doc_stack; 
-    std::unordered_map<pair<int, std::vector<lda_doc> > > test_doc_stack;
+public:
+    std::unordered_map<int, std::vector<lda_doc> > doc_stack; 
+    std::unordered_map<int, std::vector<lda_doc> > test_doc_stack;
 public:
     lda_Corpus();
+    int mapping(std::string str);
+    bool dict_insert(std::string key, int nu_count);
+    bool redict_insert(std::string key, int nu_count);
+    bool insert_year(int insert_year);
 };
 
 class lda_doc_status: doc_status {
+public:
     lda_doc_status();
+    lda_doc_status(int n, int y,int t);
 }
 
 class lda_Corpus_status: Corpus_status {
 public:
     lda_Corpus lda_cps;
-    std::unordered_map<pair<int,std::vector<lda_doc_status> > > lda_doc_status_stack; 
-    std::unordered_map<pair<int,std::vector<lda_doc_status> > > test_lda_doc_status_stack;
+    std::unordered_map<int,std::vector<lda_doc_status> > lda_doc_status_stack; 
+    std::unordered_map<int,std::vector<lda_doc_status> > test_lda_doc_status_stack;
 public: 
     lda_Corpus_status();
     int get_num_doc_per_yr(int yr);
@@ -40,6 +49,15 @@ public:
     bool word_status_update(int pos, int word_index, int yr, int nc, int new_topic, int obtopic);
     bool word_topic_status_update(int topic_index, int word_index,doubel beta, double sum_beta); 
     bool topic_status_per_doc_update(int topic_index, int yr, int doc_index, double alpha, double sum_alpha);
+    int mapping(std::string str); // map from word to word_index
+    bool build_dictionary(std::string key, int nu_count);
+    bool insert_year(int insert_year);
+    bool init_global_status(int topic_num);
+    int num_years();
+    int get_year(int pos);
+    bool update_topic_label(int yr, int doc_index, int word_index, int update_topic); 
+    bool update_topic_count_per_doc(int yr, int doc_index,int topic, int bias);
+    bool init_local_status( int yr, int T_n);
 };
 
 class lda_model : topic_model {
@@ -47,10 +65,12 @@ public:
     lda_Corpus_status Corp_status;  
     
     lda_model();
-    bool text_process();
+    lda_model(int t_nu, double a, double b);
+    bool text_process( std::string data_file, std::string dictionary_file, double test_ratio);
     bool Sampler(int iter, int year);
-    bool Inference_param_alpha(int yr);
-    bool Inference_param_beta();
+    bool Inference_param_theta(int yr);
+    bool Inference_param_phi();
+    bool Inference(std::string data_file, std::string dictionary_file, double test_ratio, int iter);  
 };
 
 //1.lda_doc define
@@ -58,22 +78,55 @@ public:
 lda_doc::lda_doc():doc_len(0),content(),year(-1) {
 }
 
+lda_doc::lda_doc(int n, int y):doc_len(n),year(y),content(){
+}
+
+bool lda_doc::update(int c){
+    content.push_back(c);
+}
+
 //2. lda_Corpus define
 
-lda_Corpus::lda_Corpus():doc_stack(), test_doc_stack, dictionary(), dict_len(0) {
+lda_Corpus::lda_Corpus():doc_stack(), test_doc_stack, dictionary(),re_dictionary() {
 }
+
+int lda_Corpus::mapping(std::string str){ 
+    return lda_cps.dictionary[str];
+}
+
+
+bool lda_Corpus::dict_insert(std::string key, int nu_count) {
+     dictionary[key] = nu_count;
+     return true;
+}
+
+bool lda_Corpus::redict_insert(std::string key, int nu_count) {
+    re_dictionary[nu_count] = key;
+    return true;
+}
+
+
+bool lda_Corpus::insert_year(int insert_year) {
+    year_stack.push_back(insert_year);
+    return true;
+}
+
 
 //3. lda_doc_status
 lda_doc_status::lda_doc_status():topic_label(), doc_len(0), year(-1), count_per_topic(), topic_vector() {
-//initiate count_per_topic, topic_label, topic_vector
-
 }
 
+lda_doc_status::lda_doc_status(int n, int y,int t) :doc_len(n), year(yr),topic_label(), count_per_topic(), topic_vector() {
+  for (int tt = 0; tt < t; ++t) {
+      topic_label.push_back(0);
+      count_per_topic.push_back(0);
+      topic_vector.push_back(0);
+  }  
+}
                                            
 //4.lda_Corpus_status define
 
-lda_Corpus_status()::lda_Corpus_status():lda_cps(), lda_doc_status_stack(), test_doc_status_stack,test_ratio,year_stack(), word_topic_matrix(), count_word_topic(), count_per_topic(), doc_num(0), dict_len(0) {
-//initiate  word_topic_matrix, count_word_topic,count_per_topic
+lda_Corpus_status()::lda_Corpus_status():lda_cps(), lda_doc_status_stack(), test_doc_status_stack,year_stack(), word_topic_matrix(), count_word_topic(), count_per_topic(), dict_len(0) {
 }
 
 int lda_Corpus_status::get_document_length(int yr, int nc) {
@@ -107,7 +160,8 @@ int lda_Corpus_status::get_count_per_topic(int topic_index){
 }
 
 bool lda_Corpus_status::word_status_update(int pos, int word_index, int yr, int nc, int new_topic, int obtopic) {
-    lda_doc_status_stack[yr][nc].topic_label[pos] = new_topic;
+    //lda_doc_status_stack[yr][nc].topic_label[pos] = new_topic;
+    update_topic_label(yr, nc, pos, new_topic);
 
     lda_doc_status_stack[yr][nc].count_per_topic[obtopic] --;
     count_word_topic[obtopic][word_index] --;
@@ -134,115 +188,64 @@ int lda_Corpus_status::get_num_doc_per_yr(int yr){
     return lda_doc_status_stack[yr].size();
 }
 
-
-
-//lda_doc_status
-lda_doc_status::lda_doc_status():topic_label(), doc_len(0), year(-1),count_per_topic(), topic_vector() {
-//initiate count_per_topic, topic_label, topic_vector
-
+int lda_Corpus_status::mapping(std::string str) {
+    return lda_cps.mapping(std::string str); 
 }
 
-lda_model::lda_model():lda_Corpus_status() {
+
+bool lda_Corpus_status::build_dictionary(std::string key, int nu_count) {
+   lda_cps.dict_insert(key,nu_count);  
+   lda_cps.redict_insert(key,nu_count);
+   return true;
 }
 
-bool lda_model::Sampler(int iter, int yr){
+bool lda_Corpus_satatus::insert_year(int insert_year) {
+    return  year_stack.push_back(insert_year);
     
-    if (iter < 0 || yr < 0){
-        return false;
-    }
-    
-    int num_corp = Corp_status.get_num_doc_per_yr(yr);// num of doc for year yr
- 
-    for (int iteration = 0; iteration < iter; ++iteration) {
-        for (int nc = 0; nc < num_corp; ++nc){
-            int doc_nc_len  = Corp_status.get_document_length(yr,nc);// length of doc nc
-            int doc_word_index = 0;
-            while( doc_word_index < doc_nc_len) {
-                int w_index = Corp_status.get_word_index(yr, nc, doc_word_index);//word index
-                int cur_topic_index = Corp_status.get_current_topic(yr, nc, doc_word_index);
-                //here to sample
-                std::vector<double> sample_record(Topic_num);
-                double sum_alpha = 0.0, sum_double = 0.0;
-                for( int hp = 0; hp < Topic_num; ++hp ) {
-                    sum_alpha += alpha[hp];
-                }
-                for (int hpb = 0; hpb < Corp_status.get_word_length(); ++hpb) {
-                    sum_beta += beta[hpb];
-                }
-                double sum_sampler = 0.0;
-
-                for (int t = 0; t < Topic_num; ++t) {
-                       //modify
-                    double first_part = 0.0, second_part = 0.0;
-                    if (t == cur_topic_index) {
-                       first_part = (alpha[t] + Corp_status.get_count_per_topic_per_doc(yr, nc, t) - 1)/(sum_alpha +  Corp_status.get_document_length(yr, nc) - 1);
-                       second_part = (beta[w_index] + Corp_status.get_count_word_topic(t,w_index) - 1)/(sum_beta + Corp_status.get_count_per_topic(t) - 1);
-                    }
-                    else {
-                       first_part = (alpha[t] + Corp_status.get_count_per_topic_per_doc(yr,nc, t) )/(sum_alpha +  Corp_status.get_document_length(yr, nc) - 1);
-                       second_part = (beta[w_index] + Corp_status.get_count_word_topic(t, w_index) )/(sum_beta + Corp_status.get_count_per_topic(t) );
-
-                    } 
-                    sample_record[t] = first_part * second_part; 
-                    sum_sampler += sample_record[t]
-                }
-                // uniform sample 
-                strand (time(NULL));
-                double ui_random = rand() % RAND_MAX;
-                ui_random *= sum_sampler;
-                sum_sampler = 0.0;
-                int T = -1;
-                for (int t = 0; t < Topic_num; ++t) {
-                   sum_sampler += sample_record[t];
-                   if( ui_random <= sum_sampler ) {
-                      T = t; 
-                      break;
-                   } 
-                }
-
-                if (T == -1) {
-                   return false; 
-                }
-
-                if ( T != cur_topic_index ) {
-                   Corp_status.word_status_update(doc_word_index,  w_index, yr, nc, T, cur_topic_index);
-                }
-               doc_word_index ++; 
-            }
-        }
-
-    }
-    return true;
 }
 
-bool lda_model::Inference_param_alpha(int yr) {
-    double sum_alpha = 0.0;
-    for (int i = 0; i < alpha.size() ; ++i) {
-        sum_alpha += alpha[i];
-    }
-    for ( int m = 0; m < Corp_status.get_num_doc_per_yr(yr); ++m ) {
-        for(int t = 0; t < Topic_num.get_num_doc_per_yr(yr); ++t) {  
-           topic_status_per_doc_update( t, yr, m, alpha[t], sum_alpha); 
-        }    
-    }
+
+bool lda_Corpus_status::init_global_status(int topic_num) {
+   int word_nums = lda_cps.dictionary.size();
+   for (int i = 0; i < topic_num; ++i) {
+        std::vector<double> inter_vec(word_nums, 0.0);
+        word_topic_matrix.push_back(inter_vec);
+        std::vector<int> inter_vec2(word_nums, 0);
+        count_word_topic.push_back(inter_vec2); 
+        count_per_topic.push_back(0);
+   } 
+}
+
+int lda_Corpus_status::num_years() {
+    return year_stack.size(); 
+}
+
+
+int lda_Corpus_status::get_year(int pos){
+    return year_stack[pos];
+}
+
+bool lda_Corpus_status::update_topic_label(int yr, int doc_index, int word_index, int update_topic) {
+    lda_doc_status_stack[yr][doc_index].topic_label[word_index] = update_topic;
     return true; 
-}
+} 
 
-bool lda_model::Inference_param_beta(){
-   double sum_beta = 0.0;
-   for (int j = 0; j < beta.size(); ++j) {
-        sum_beta += beta[i];
-   }
-   for (int t = 0; t < Topic_num; ++t) {
-        for ( int v = 0; v < Corp_status.get_word_length(); ++v ) {
-             Corp_status.word_topic_status_update(t, v,beta[v], sum_beta); 
-        }
-    }
-   
-    
-    
-}
+bool lda_Corpus_status::update_topic_count_per_doc(int yr, int doc_index,int topic, int bias) {
+    lda_doc_status_stack[yr][doc_index].count_per_topic[topic] = lda_doc_status_stack[yr][doc_index].count_per_topic[topic] + bias;
+    return true;
+} 
 
-bool lda_model::text_process() {
-   
+bool lda_Corpus_status::init_local_status( int yr, int T_n) {
+   for (int i = 0; i < get_num_doc_per_yr(yr); ++i) {
+        int doc_len = get_document_length(yr, i); 
+        for ( int w = 0; w < doc_len; ++w ) {
+           srand(time(NULL) * w);
+           int t = rand() % ( T_n); 
+           update_topic_label(yr,i,w,t); 
+           update_topic_count_per_doc(yr,i,t,1);
+           int w_index = get_word_index(yr, i, w); 
+           count_word_topic[t][w_index]++;
+           count_per_topic[t]++; 
+        }      
+   } 
 }
