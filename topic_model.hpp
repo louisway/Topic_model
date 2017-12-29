@@ -1,4 +1,4 @@
-#include <uordered_map>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include <utility>
@@ -12,6 +12,7 @@ public:
     
 public:
     doc();
+    doc(int n,int y);
 
 };
  
@@ -22,7 +23,7 @@ private:
     std::unordered_map<int, std::vector<doc> > doc_stack;// year - doc_stack
     std::unordered_map<int, std::vector<doc> > test_doc_stack;
 public:
-    std::unordered_map<std::srtring, int > dictionary;
+    std::unordered_map<std::string, int > dictionary;
     std::unordered_map<int, std::string> re_dictionary;
     //int dict_len;
     //int doc_num; 
@@ -31,9 +32,8 @@ public:
 
 public: 
     Corpus();
-    virtual bool corpus_process();
 };
-
+     
 //document_status
 class doc_status {
 public:
@@ -45,12 +45,13 @@ public:
 
 public:
     doc_status(); 
+    doc_status(int n, int y);
 };	
 
 
 //corpus_status
 class Corpus_status {
-private:
+public:
     Corpus cps;
     std::unordered_map<int, std::vector<doc_status> > doc_status_stack;// year -doc_status_stack
     std::unordered_map<int, std::vector<doc_status> > test_doc_status_stack;
@@ -58,8 +59,8 @@ private:
 public:
     int dict_len;
     std::vector<int> year_stack;// year - stack
-    std::vector<vector<double> > word_topic_matrix;
-    std::vector<vector<int> > count_word_topic;
+    std::vector<std::vector<double> > word_topic_matrix;
+    std::vector<std::vector<int> > count_word_topic;
     std::vector<int> count_per_topic;
 
 public:
@@ -70,14 +71,39 @@ public:
 class topic_model{
     
 //define parameter
-protect:
+public:
     int Topic_num;   
     double test_ratio;
     std::vector<double> alpha, beta;
-    virtual bool text_process();
-    virtual bool Inference(int iter, int year);
+    bool text_process();
+    bool Inference(int iter, int year);
 private:
     Corpus cps;  
 public:
-    topic_model(int topic_num, double a, double b);
+    topic_model();
+    topic_model(int topic_num, double a, double b, double ratio);
 };
+
+topic_model::topic_model():Topic_num(0),alpha(),beta(),test_ratio(0) {
+}
+ 
+topic_model::topic_model(int topic_num, double a, double b, double ratio):Topic_num(topic_num), alpha(1, a), beta(1, b), test_ratio(ratio) {
+}
+
+Corpus_status::Corpus_status():dict_len(0), year_stack(), word_topic_matrix(), count_word_topic(), count_per_topic(){
+}
+
+doc_status::doc_status(): doc_len(0),year(-1),topic_label(),count_per_topic(),topic_vector(){
+}
+
+doc_status::doc_status(int n, int y):doc_len(n),year(y),topic_label(),count_per_topic(), topic_vector() {
+}
+
+Corpus::Corpus():doc_stack(),test_doc_stack(),dictionary(),re_dictionary() {
+}
+
+doc::doc():doc_len(0),content(),year(-1){
+}
+
+doc::doc(int n,int y):doc_len(n), year(-1),content() {
+}
